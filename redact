@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+import sys
+import fileinput
+import pdfminer.high_level as pdf
+import progressbar
+import argparse
+import filetype
+
+import redactifier
+import pdfhax
+
+
+def redact(inputString):
+    redactedText, names = redactifier.redactAllNames(inputString)
+    print("\n" + redactedText)
+    print("\nContained {} instances of the following names:".format(len(names)))
+    print(sorted(set(names)))
+
+
+
+def redactPDF(pdfFile):
+    pdfFile.close()
+    text = pdfhax.convert_pdf_to_txt(pdfFile.name)
+    redact(text.decode('utf-8'))
+    # print("Loaded \"{}\" ({} pages).".format(pdfFile.name, pdf.getNumPages()))
+    # bar = progressbar.ProgressBar(maxval=pdf.getNumPages(), \
+    #     widgets=['Processing pages (', progressbar.SimpleProgress(), ')... ', progressbar.Bar('=', '[', ']'), ' ', progressbar.AdaptiveETA()])
+    # count = 0
+
+    # bar.start()
+    # for page in pdf.pages:
+    #     bar.update(count)
+    #     count = count + 1
+    #     redact(page.extractText())
+    # bar.finish()
+
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Redact all names from a file, a set of files, or stdin.')
+    parser.add_argument('--except', type=str, metavar='"ignore this name"', dest='ignore', action='append',
+                        help='A name to disregard when redacting. May be specified multiple times.')
+    parser.add_argument('files', metavar='file', type=argparse.FileType('r'), nargs='+', default=(None if sys.stdin.isatty() else sys.stdin),
+                        help='One or more paths to one or more files you wish to redact.')
+    args = parser.parse_args()
+
+    if args.ignore:
+        print("Ignoring {}".format(args.ignore))
+
+    for file in args.files:
+        kind = filetype.guess(file.name)
+
+        if kind is None: # probably txt
+            print("\nRedacting names from text file \"" + file.name + "\"...")
+            redact(file.read())
+        elif kind.mime == 'application/pdf':
+            redactPDF(file)
+        else:
+            print("Can't redact files of type \"{}\"".format(kind.mime))
